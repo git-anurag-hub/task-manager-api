@@ -3,6 +3,8 @@ const router = new express.Router()
 const auth = require("../middleware/auth")
 const Task = require("../models/task")
 const User = require("../models/user")
+const multer = require("multer")
+const sharp = require("sharp")
 
 router.post("/tasks",auth ,async (req ,res)=>{
     const task = new Task ({
@@ -116,6 +118,58 @@ router.delete("/tasks/:id",auth, async (req,res)=>{
         res.send(task)
     }catch(e){
         res.status(400).send(e)
+    }
+})
+
+const upload = multer({
+    limits:{
+        fileSize:1000000
+    },
+    fileFilter(req,file,cb){
+        if(!(file.originalname.endsWith(".jpg")||file.originalname.endsWith(".jpeg")||file.originalname.endsWith(".png"))){
+            return cb(new Error("Provide an image"))
+        }
+        cb(undefined,true)
+    }
+})
+
+router.post("/tasks/:id/image",auth,upload.single("image"),async(req,res)=>{
+    const buffer = await sharp(req.file.buffer).resize({width:250 , height:250}).png().toBuffer()
+    const id = req.params.id
+    const task = await Task.findOne({_id:id , owner:req.user._id})
+    task.image = buffer
+    await task.save()
+    res.send()
+},(error,req,res,next)=>{
+    res.status(400).send({"error":error.message})
+})
+
+router.get('/tasks/:id/image',auth, async (req, res) => { 
+    try {
+        const id = req.params.id
+        const task = await Task.findOne({_id:id , owner:req.user._id})
+        if (!task || !task.image) { 
+            throw new Error()
+        }
+        res.set('Content-Type', 'image/jpg')
+        res.send(task.image) 
+    } catch (e) {
+        res.status(404).send() 
+    }
+})
+
+router.delete('/tasks/:id/image',auth,async(req,res)=>{
+    try {
+        const id = req.params.id
+        const task = await Task.findOne({_id:id , owner:req.user._id})
+        if (!task || !task.image) { 
+            throw new Error()
+        }
+        task.image = undefined
+        await task.save()
+        res.status(200).send()
+    } catch (e) {
+        res.status(404).send() 
     }
 })
 
